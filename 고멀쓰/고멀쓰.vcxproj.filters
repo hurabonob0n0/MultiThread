@@ -45,12 +45,6 @@
     <ClCompile Include="20250318 -2.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="20250325 - 1.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="20250325 - 2.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="20250325.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
