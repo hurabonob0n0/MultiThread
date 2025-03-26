@@ -1,4 +1,4 @@
-#define ex12
+#define ex13
 #define chapter2
 
 #include <iostream>
@@ -151,8 +151,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2, j);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "sum : " << sum << endl;
 		elapsed_time();
@@ -166,8 +167,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_with_mutex, j);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		printvsumonconsole();
 		elapsed_time();
@@ -201,8 +203,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_with_atomic_int, j);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "atomic sum : " << asum << endl;
 		elapsed_time();
@@ -236,8 +239,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_Optimistic, j);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "volatile sum : " << vsum << endl;
 		elapsed_time();
@@ -250,8 +254,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_Optimistic_2, j);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "atomic sum : " << asum << endl;
 		elapsed_time();
@@ -287,8 +292,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_Optimistic_3, j, i);
-			vecthreads[i].join();
 		}
+		for (auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "volatile sum : " << vsum << endl;
 		elapsed_time();
@@ -323,8 +329,9 @@ int main()
 		Timer_Start();
 		for (int i = 0; i < j; ++i) {
 			vecthreads.emplace_back(thread_plus2_Optimistic_4, j, i);
-			vecthreads[i].join();
 		}
+		for(auto& threads : vecthreads)
+			threads.join();
 		cout << "--------" << "num threads : " << j << " --------" << endl;
 		cout << "volatile sum : " << vsum << endl;
 		elapsed_time();
@@ -365,6 +372,36 @@ void Sender()
 	g_ready = true;
 }
 
+volatile int sum = 0;
+volatile bool flag[2]{ false,false };
+volatile int victim = 0;
+
+void pLock(int myID)
+{
+	int other = 1 - myID;
+	flag[myID] = true;
+	victim = myID;
+	while (flag[other] && victim == myID) {}
+	//교수님 코드는 while(iswaiting[other] && victim == myID){}
+}
+
+void pUnlock(int myID)
+{
+	flag[myID] = false;
+}
+
+void ThreadFunc(int thid)
+{
+	for (auto i = 0; i < 25000000; ++i)
+	{
+		pLock(thid);
+		sum = sum + 2;
+		pUnlock(thid);
+	}
+}
+
+
+
 #endif // chapter2
 
 
@@ -383,12 +420,16 @@ int main()
 	thread t2{ Receiver };
 	t1.join(); t2.join();
 }
-#endif
+#endif // 이렇게 하면 해결이 되긴 된다. // 여기 뒤로 volatile 포인터에 대해 나오는데 여기는 나도 이해가 안된다.
 
 #ifdef ex13
 int main()
 {
+	thread t1{ ThreadFunc,0 };
+	thread t2{ ThreadFunc,1 };
+	t1.join(); t2.join();
 
+	cout << "Sum = " << sum << '\n';
 }
 #endif
 
