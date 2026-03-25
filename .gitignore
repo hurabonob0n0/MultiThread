@@ -1,0 +1,8 @@
+# Visual Studio 임시 파일 및 빌드 결과물
+.vs/
+Debug/
+Release/
+x64/
+*.user
+*.aps
+*.intermediate.obj
