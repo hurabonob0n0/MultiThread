@@ -20,18 +20,13 @@ public:
 	}
 };
 
-class DUMMY_MUTEX {
-public:
-	void lock() {};
-	void unlock() {};
-};
+
 
 
 class FLIST {
 private:
 	NODE* head, * tail;
-	//DUMMY_MUTEX mtx; // Dummy mutex for testing without locking
-
+	
 public:
 	FLIST()
 	{
@@ -52,73 +47,78 @@ public:
 
 	bool Add(int x)
 	{
-		head->lock(); // Lock the mutex to ensure thread safety
-		NODE* pred = head;
-		NODE* curr = pred->next;
-		curr->lock(); // Lock the current node's mutex before accessing it
+		auto prev = head;
+		prev->lock();
+		auto curr = prev->next;
+		curr->lock();
 		while (curr->data < x) {
-			pred->unlock(); // Unlock the previous node's mutex before moving forward
-			pred = curr;
+			prev->unlock();
+			prev = curr;
 			curr = curr->next;
-			curr->lock(); // Lock the next node's mutex before accessing it
+			curr->lock();
 		}
 
 		if (curr->data == x) {
-			pred->unlock();
-			curr->unlock(); // Unlock the mutex before returning
-			return false; // Element already exists
+			prev->unlock();	curr->unlock();
+			return false;
 		}
 		else {
-			NODE* new_node = new NODE{ x };
-			pred->next = new_node;
-			new_node->next = curr;
-			pred->unlock();
-			curr->unlock(); // Unlock the mutex before returning
-			return true; // Element added successfully
+			auto newNode = new NODE(x);
+			newNode->next = curr;
+			prev->next = newNode;
+			prev->unlock();	curr->unlock();
+			return true;
 		}
 	}
 
 	bool Remove(int x)
 	{
-		head->lock(); // Lock the mutex to ensure thread safety
-		NODE* pred = head;
-		NODE* curr = pred->next;
+		auto prev = head;
+		prev->lock();
+		auto curr = prev->next;
 		curr->lock();
 		while (curr->data < x) {
-			pred->unlock();
-			pred = curr;
+			prev->unlock();
+			prev = curr;
 			curr = curr->next;
 			curr->lock();
 		}
-		if (curr->data == x) {
-			pred->next = curr->next;
-			pred->unlock();
-			curr->unlock();
-			delete curr;
-			return true; // Element removed successfully
+
+		if (curr->data != x) {
+			prev->unlock();	curr->unlock();
+			return false;
 		}
 		else {
-			pred->unlock();
-			curr->unlock();
-			return false;
+			prev->next = curr->next;
+			prev->unlock();	curr->unlock();
+			delete curr;
+			return true;
 		}
 	}
 
 	bool Contains(int x)
 	{
-		
-		NODE* curr = head->next;
+		auto prev = head;
+		prev->lock();
+		auto curr = prev->next;
 		curr->lock();
 		while (curr->data < x) {
+			prev->unlock();
+			prev = curr;
 			curr = curr->next;
+			curr->lock();
 		}
+
 		if (curr->data == x) {
-			curr->unlock();
-			return true; // Element found
+			prev->unlock();	curr->unlock();
+			return true;
 		}
-		curr->unlock();
-		return false;
+		else {
+			prev->unlock();	curr->unlock();
+			return false;
+		}
 	}
+
 
 	void print20()
 	{
