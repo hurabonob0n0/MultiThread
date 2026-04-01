@@ -18,5 +18,14 @@
     <ClCompile Include="CAS.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Clist.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="list원본.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="FList.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
