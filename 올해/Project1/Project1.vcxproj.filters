@@ -36,5 +36,8 @@
     <ClCompile Include="ASPlist.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="EBRlist.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
