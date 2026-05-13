@@ -7,7 +7,7 @@
 #include <set>
 
 constexpr int MAX_THREADS = 32;
-constexpr int NUM_TEST = 2'0000;
+constexpr int NUM_TEST = 400'0000;
 constexpr int RANGE = 1000;
 
 
@@ -1314,10 +1314,9 @@ class WFU_SET {
 
 public:
 	WFU_SET() {
-		tail = new LOGNODE(INVOCATION(CONTAINS, 0)); // 더미 노드
-		tail->m_seq = 1; // Wait-Free 논문에 따른 tail의 초기 seq 값 할당
+		tail = new LOGNODE(INVOCATION(CONTAINS, 0)); 
+		tail->m_seq = 1; 
 
-		// 초기화: 모든 스레드의 head와 announce가 tail을 가리키도록 설정
 		for (int i = 0; i < MAX_THREADS; ++i) {
 			head[i] = tail;
 			announce[i] = tail;
@@ -1339,18 +1338,15 @@ public:
 	}
 
 	RESPONSE apply(INVOCATION inv) {
-		int i = thread_id; // 현재 스레드 ID (0 ~ MAX_THREADS-1)
+		int i = thread_id; 
 		announce[i] = new LOGNODE(inv);
 		head[i] = max_head();
 
-		// 내 작업이 합의(Consensus) 목록에 올라갈 때까지(m_seq > 0) 재시도
 		while (announce[i]->m_seq == 0) {
 			LOGNODE* before = head[i];
-			// 다른 스레드의 작업을 돕기(Help) 위한 타겟 노드 선정
 			LOGNODE* help = announce[(before->m_seq + 1) % MAX_THREADS];
 			LOGNODE* prefer;
 
-			// 도울 작업이 처리 전이라면 해당 작업을 우선적으로 돕고, 아니면 내 작업을 시도
 			if (help->m_seq == 0) {
 				prefer = help;
 			}
@@ -1358,18 +1354,15 @@ public:
 				prefer = announce[i];
 			}
 
-			// Consensus 객체를 통해 다음 노드 결정
 			LOGNODE* after = before->decide_next.decide(prefer);
 			before->m_next = after;
 			after->m_seq = before->m_seq + 1;
 			head[i] = after;
 		}
 
-		// --- 여기서부터는 합의된 로그를 순차적으로 실행하여 상태 복원 ---
 		SEQ_SET seq_set;
 		LOGNODE* current = tail->m_next;
 
-		// 내 명령(announce[i]) 직전까지의 상태를 seq_set에 반영
 		while (current != announce[i]) {
 			seq_set.apply(current->m_inv);
 			current = current->m_next;
@@ -1377,7 +1370,6 @@ public:
 
 		head[i] = announce[i];
 
-		// 내 명령을 최종적으로 실행하고 결과 반환
 		return seq_set.apply(current->m_inv);
 	}
 
@@ -1411,7 +1403,7 @@ public:
 	}
 };
 
-WFU_SET my_set;
+LFLIST my_set;
 
 #include <array>
 
