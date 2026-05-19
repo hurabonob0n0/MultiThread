@@ -1111,63 +1111,6 @@ public:
 	}
 };
 
-constexpr int MAX_NEXT = 9; 
-
-class SK_NODE {
-public:
-	int data;
-	SK_NODE* next[MAX_NEXT] = { nullptr };
-	int num_nexts = 1;
-	std::mutex mtx;
-	
-	SK_NODE(int value) : data(value), num_nexts(1) {}
-	SK_NODE(int value, int num) : data(value), num_nexts(num) {}
-	void lock() { mtx.lock(); }
-	void unlock() { mtx.unlock(); }
-	
-};
-
-class C_SKLIST {
-	SK_NODE* head, * tail;
-public:
-	C_SKLIST()
-	{
-		std::cout << "Testing Coarse-Grained Skip List\n";
-		head = new SK_NODE(std::numeric_limits<int>::min());
-		tail = new SK_NODE(std::numeric_limits<int>::max());
-		for (int i = 0; i < MAX_NEXT; ++i) {
-			head->next[i] = tail;
-		}
-	}
-	void clear()
-	{
-		SK_NODE* current = head->next[0];
-		while (current != tail) {
-			SK_NODE* temp = current;
-			current = current->next[0];
-			delete temp;
-		}
-		for (int i = 1; i < MAX_NEXT; ++i) {
-			head->next[i] = tail;
-		}
-	}
-
-	~C_SKLIST() {
-		clear();
-		delete head;
-		delete tail;
-	}
-
-	bool Add(int x)
-	{
-		head->lock();
-		SK_NODE* pred[MAX_NEXT], * curr[MAX_NEXT];
-		Find(x, pred, curr);
-		
-		return true;
-	}
-};
-
 
 // 싱글 쓰레드 통합 API
 enum INVO_OP { ADD = 0, REMOVE = 1, CONTAINS = 2 };
@@ -1317,11 +1260,8 @@ public:
 		}
 		seq_set.print20();
 	}
-
-	bool Add(int x) { return apply(INVOCATION(ADD, x)); }
-	bool Remove(int x) { return apply(INVOCATION(REMOVE, x)); }
-	bool Contains(int x) { return apply(INVOCATION(CONTAINS, x)); }
 };
+
 
 // 벤치 마킹
 class STD_SET {
@@ -1364,103 +1304,124 @@ public:
 	}
 };
 
-class WFU_SET {
-	LOGNODE* announce[MAX_THREADS];
-	LOGNODE* head[MAX_THREADS];
-	LOGNODE* tail;
+constexpr int MAX_NEXTS = 9;
 
+class SK_NODE {
+	public:
+	int data;
+	SK_NODE* next[MAX_NEXTS] = { nullptr };
+	int num_nexts;
+	SK_NODE(int value) : data(value), num_nexts(1) {}
+	SK_NODE(int value, int num) : data(value), num_nexts(num) {}
+};
+
+class C_SKLIST {
+	SK_NODE* head, * tail;
+	std::mutex mtx;
 public:
-	WFU_SET() {
-		tail = new LOGNODE(INVOCATION(CONTAINS, 0)); 
-		tail->m_seq = 1; 
-
-		for (int i = 0; i < MAX_THREADS; ++i) {
-			head[i] = tail;
-			announce[i] = tail;
+	C_SKLIST()
+	{
+		std::cout << "Testing Coarse Grain Skip List\n";
+		head = new SK_NODE(std::numeric_limits<int>::min());
+		tail = new SK_NODE(std::numeric_limits<int>::max());
+		for (int i = 0; i < MAX_NEXTS; ++i) {
+			head->next[i] = tail;
 		}
 	}
-
-	~WFU_SET() {
+	void clear()
+	{
+		SK_NODE* current = head->next[0];
+		while (head->next[0] != tail) {
+			SK_NODE* temp = head->next[0];
+			head->next[0] = temp->next[0];
+			delete temp;
+		}
+		for (int i = 1; i < MAX_NEXTS; ++i) {
+			head->next[i] = tail;
+		}
+	}
+	~C_SKLIST() {
 		clear();
+		delete head;
 		delete tail;
 	}
 
-	LOGNODE* max_head() {
-		LOGNODE* max_node = head[0];
-		for (int i = 1; i < MAX_THREADS; ++i) {
-			if (max_node->m_seq < head[i]->m_seq)
-				max_node = head[i];
-		}
-		return max_node;
-	}
+	// 탐색 결과를 반환하는 Find: pred[], succ[] 배열을 채우고 해당 레벨에서의 발견 여부 반환
+	void Find(int x, SK_NODE* pred[], SK_NODE* curr[]) {
+		int found_level = -1;
+		SK_NODE* prev = head;
 
-	RESPONSE apply(INVOCATION inv) {
-		int i = thread_id; 
-		announce[i] = new LOGNODE(inv);
-		head[i] = max_head();
-
-		while (announce[i]->m_seq == 0) {
-			LOGNODE* before = head[i];
-			LOGNODE* help = announce[(before->m_seq + 1) % MAX_THREADS];
-			LOGNODE* prefer;
-
-			if (help->m_seq == 0) {
-				prefer = help;
+		for (int level = MAX_NEXTS - 1; level >= 0; --level) {
+			if (level == MAX_NEXTS - 1)	pred[level] = head;
+			else pred[level] = pred[level + 1];
+			curr[level] = pred[level]->next[level];
+			while (curr[level]->data < x) {
+				pred[level] = curr[level];
+				curr[level] = curr[level]->next[level];
 			}
-			else {
-				prefer = announce[i];
+		}
+	}
+
+	bool Add(int x)
+	{
+		SK_NODE* pred[MAX_NEXTS], * curr[MAX_NEXTS];
+		mtx.lock();
+		Find(x, pred, curr);
+		if (curr[0]->data != x) {
+			int num_nexts = 1;
+			while (num_nexts < MAX_NEXTS && rand() % 2 == 0) {
+				num_nexts++;
 			}
-
-			LOGNODE* after = before->decide_next.decide(prefer);
-			before->m_next = after;
-			after->m_seq = before->m_seq + 1;
-			head[i] = after;
+			SK_NODE* new_node = new SK_NODE(x, num_nexts);
+			for (int i = 0; i < num_nexts; ++i) {
+				new_node->next[i] = curr[i];
+				pred[i]->next[i] = new_node;
+			}
+			mtx.unlock();
+			return true; // Element added successfully
 		}
-
-		SEQ_SET seq_set;
-		LOGNODE* current = tail->m_next;
-
-		while (current != announce[i]) {
-			seq_set.apply(current->m_inv);
-			current = current->m_next;
+		mtx.unlock();
+		return false;
+	}
+	bool Remove(int x)
+	{
+		SK_NODE* pred[MAX_NEXTS], * curr[MAX_NEXTS];
+		mtx.lock();
+		Find(x, pred, curr);
+		if (curr[0]->data == x) {
+			for (int i = 0; i < curr[0]->num_nexts; ++i) {
+				pred[i]->next[i] = curr[i]->next[i];
+			}
+			delete curr[0];
+			mtx.unlock();
+			return true; // Element removed successfully
 		}
-
-		head[i] = announce[i];
-
-		return seq_set.apply(current->m_inv);
+		mtx.unlock();
+		return false;
+	}
+	bool Contains(int x)
+	{
+		SK_NODE* pred[MAX_NEXTS], * curr[MAX_NEXTS];
+		mtx.lock();
+		Find(x, pred, curr);
+		bool found = (curr[0]->data == x);
+		mtx.unlock();
+		if (found) return true;
+		return false;
+	}
+	void print20()
+	{
+		SK_NODE* curr = head->next[0];
+		for (int i = 0; i < 20 && curr != tail; ++i) {
+			std::cout << curr->data << ", ";
+			curr = curr->next[0];
+		}
+		std::cout << "\n";
 	}
 
-	void clear() {
-		for (int i = 0; i < MAX_THREADS; ++i) {
-			head[i] = tail;
-			announce[i] = tail;
-		}
-		LOGNODE* curr = tail->m_next;
-		while (nullptr != curr) {
-			LOGNODE* temp = curr;
-			curr = curr->m_next;
-			delete temp;
-		}
-		tail->m_next = nullptr;
-		tail->decide_next.clear();
-	}
-
-	bool Add(int x) { return apply(INVOCATION(ADD, x)); }
-	bool Remove(int x) { return apply(INVOCATION(REMOVE, x)); }
-	bool Contains(int x) { return apply(INVOCATION(CONTAINS, x)); }
-
-	void print20() {
-		SEQ_SET seq_set;
-		LOGNODE* curr = tail->m_next;
-		while (nullptr != curr) {
-			seq_set.apply(curr->m_inv);
-			curr = curr->m_next;
-		}
-		seq_set.print20();
-	}
 };
 
-LFLIST my_set;
+C_SKLIST my_set;
 
 #include <array>
 

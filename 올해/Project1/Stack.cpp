@@ -1,11 +1,11 @@
-#include <iostream>
+﻿#include <iostream>
 #include <thread>
 #include <vector>
 #include <chrono>
 #include <mutex>
 #include <queue>
 
-constexpr int MAX_THREADS = 32;
+constexpr int MAX_THREADS = 16;
 constexpr int NUM_TEST = 1000'0000;
 
 class NODE {
@@ -96,6 +96,10 @@ public:
 		std::cout << "Testing Lock Free Synchronization Stack\n";
 		top = nullptr;
 	}
+	~LFSTACK()
+	{
+		clear();
+	}
 
 	void clear()
 	{
@@ -149,7 +153,192 @@ public:
 	}
 };
 
-LFSTACK my_stack;
+class BACKOFF {
+	private:
+		int min_delay,max_delay,limit;
+public:
+	BACKOFF(int min_d = 1, int max_d = 100) : min_delay(min_d), max_delay(max_d), limit(min_d) {}
+	void pause() {
+		int delay = rand() % (limit + 1); // Random delay between 1 and limit
+		if (limit < max_delay) {
+			limit = std::min(limit * 2, max_delay); // Exponentially increase the limit up to max_delay
+		}
+		std::this_thread::sleep_for(std::chrono::microseconds(delay)); // Sleep for the random delay
+	}
+};
+
+//class BACKOFF_v2 {
+//private:
+//	int min_delay, max_delay, limit;
+//public:
+//	BACKOFF_v2(int min_d = 1, int max_d = 100) : min_delay(min_d), max_delay(max_d), limit(min_d) {}
+//	void pause() {
+//		int delay = rand() % (limit + 1); // Random delay between 1 and limit
+//		if (limit < max_delay) {
+//			limit = std::min(limit * 2, max_delay); // Exponentially increase the limit up to max_delay
+//		}
+//		int start, current;
+//		_asm RDTSC;
+//		_asm mov start, eax;
+//		do {
+//			_asm RDTSC;
+//			_asm mov current, eax;
+//		} while (current – start < delay);
+//	}
+//};
+
+class LFBOSTACK {
+private:
+	NODE* volatile top;
+public:
+	bool CAS(NODE* volatile* addr, NODE* expected, NODE* new_node) {
+		return std::atomic_compare_exchange_strong(
+			reinterpret_cast<std::atomic<NODE*> volatile*>(addr),
+			&expected,
+			new_node
+		);
+	}
+	LFBOSTACK()
+	{
+		std::cout << "Testing Lock Free BO Synchronization Stack\n";
+		top = nullptr;
+	}
+	~LFBOSTACK() {
+		clear();
+	}
+
+	void clear()
+	{
+		while (top != nullptr) {
+			NODE* temp = top;
+			top = top->next;
+			delete temp;
+		}
+	}
+
+	void Push(int x)
+	{
+		BACKOFF bo;
+		NODE* new_node = new NODE(x);
+		while (true) {
+			NODE* old_top = top;
+			new_node->next = old_top; // Point the new node to the current top
+			if (CAS(&top, old_top, new_node)) {
+				return; // Push successful
+			}
+			bo.pause();
+			// Failed to update the top pointer, retry
+		}
+	}
+
+	int Pop()
+	{
+		BACKOFF bo;
+		while (true) {
+			NODE* old_top = top;
+			if (old_top == nullptr) {
+				return -2; // Stack is empty
+			}
+			NODE* new_top = old_top->next; // The new top will be the next node
+			if (CAS(&top, old_top, new_top)) {
+				int value = old_top->data;
+				//delete old_top; // Free the old top node
+				return value; // Pop successful
+			}
+			bo.pause();
+			// Failed to update the top pointer, retry
+		}
+	}
+
+	void print20()
+	{
+		NODE* curr = top;
+		int count = 0;
+		while (curr != nullptr && count < 20) {
+			std::cout << curr->data << ", ";
+			curr = curr->next;
+			count++;
+		}
+		std::cout << "\n";
+	}
+};
+
+class LFBOSTACK_Y {
+private:
+	NODE* volatile top;
+public:
+	bool CAS(NODE* volatile* addr, NODE* expected, NODE* new_node) {
+		return std::atomic_compare_exchange_strong(
+			reinterpret_cast<std::atomic<NODE*> volatile*>(addr),
+			&expected,
+			new_node
+		);
+	}
+	LFBOSTACK_Y()
+	{
+		std::cout << "Testing Lock Free yeild Synchronization Stack\n";
+		top = nullptr;
+	}
+	~LFBOSTACK_Y() {
+		clear();
+	}
+
+	void clear()
+	{
+		while (top != nullptr) {
+			NODE* temp = top;
+			top = top->next;
+			delete temp;
+		}
+	}
+
+	void Push(int x)
+	{
+		NODE* new_node = new NODE(x);
+		while (true) {
+			NODE* old_top = top;
+			new_node->next = old_top; // Point the new node to the current top
+			if (CAS(&top, old_top, new_node)) {
+				return; // Push successful
+			}
+			std::this_thread::yield(); // Yield the thread to allow other threads to make progress
+			// Failed to update the top pointer, retry
+		}
+	}
+
+	int Pop()
+	{
+		BACKOFF bo;
+		while (true) {
+			NODE* old_top = top;
+			if (old_top == nullptr) {
+				return -2; // Stack is empty
+			}
+			NODE* new_top = old_top->next; // The new top will be the next node
+			if (CAS(&top, old_top, new_top)) {
+				int value = old_top->data;
+				//delete old_top; // Free the old top node
+				return value; // Pop successful
+			}
+			std::this_thread::yield(); // Yield the thread to allow other threads to make progress
+			// Failed to update the top pointer, retry
+		}
+	}
+
+	void print20()
+	{
+		NODE* curr = top;
+		int count = 0;
+		while (curr != nullptr && count < 20) {
+			std::cout << curr->data << ", ";
+			curr = curr->next;
+			count++;
+		}
+		std::cout << "\n";
+	}
+};
+
+LFBOSTACK my_stack;
 
 #include <array>
 #include <unordered_set>
